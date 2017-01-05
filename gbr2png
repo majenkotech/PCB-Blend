@@ -1,0 +1,109 @@
+#!/bin/bash
+
+RES=2000
+
+RED='#CC0000'
+REDS='#660000'
+GREEN='#00CC00'
+GREENS='#006600'
+BLUE='#0066CC'
+BLUES='#002266'
+ENIG='#DDB500'
+HASL='#888888'
+
+function makeimg() {
+    local BASE=$1
+    local LAYER=$2
+    local FG=$3
+    local BG=$4
+    echo "Generating $BASE $LAYER"
+    gerbv --border=0 --dpi=$RES --export=png "$BASE.outline.gbr" "$BASE.$LAYER.gbr" --output="$BASE.$LAYER.png" --foreground='#000000' --foreground="$FG" --background="$BG"
+}
+
+function color() {
+    local FILE=$1
+    local OLD=$2
+    local NEW=$3
+    convert "$FILE" -fuzz "20%" -fill "$NEW" -opaque "$OLD" ".$FILE"
+    mv ".$FILE" "$FILE"
+}
+
+function transparent() {
+    local FILE=$1
+    local BG=$2
+    convert "$FILE" -fuzz "10%" -transparent "$BG" ".$FILE"
+    mv ".$FILE" "$FILE"
+}
+
+function maketexture() {
+    local FILE=$1
+    local SIDE=$2
+    local METAL=$3
+    local MASK=$4
+    local SHADOW=$5
+    local OUT=$6
+
+    convert -background transparent "$FILE.$SIDE.png" -compose overlay "$FILE.${SIDE}mask.png" -flatten "$OUT"
+    color "$OUT" "#888888" "$MASK"
+    color "$OUT" "black" "$SHADOW"
+    color "$OUT" "white" "$METAL"
+    convert -background transparent "$OUT" -compose screen "$FILE.${SIDE}silk.png" -flatten ".$OUT"
+    mv ".$OUT" "$OUT"
+}
+
+function makemirror() {
+    local FILE=$1
+    local SIDE=$2
+    local OUT=$3
+
+    convert -background transparent "$FILE.$SIDE.png" -compose overlay "$FILE.${SIDE}mask.png" -flatten "$OUT"
+    color "$OUT" "white" "white"
+    color "$OUT" "#888888" "black"
+    color "$OUT" "black" "black"
+}
+
+B=$1
+
+if [ -z "$B" ]; then
+    echo "Usage: $0 <Gerber Basei Name>"
+    exit 10
+fi
+
+makeimg "$B" "top" "#FFFFFF" "#000000"
+makeimg "$B" "bottom" "#FFFFFF" "#000000"
+makeimg "$B" "topsilk" "#FFFFFF" "#000000"
+color "$B.topsilk.png" "white" "#FFFFFF"
+transparent "$B.topsilk.png" "black"
+makeimg "$B" "bottomsilk" "#FFFFFF" "#000000"
+color "$B.bottomsilk.png" "white" "#FFFFFF"
+transparent "$B.bottomsilk.png" "black"
+
+makeimg "$B" "topmask" "#FFFFFF" "#000000"
+makeimg "$B" "bottommask" "#FFFFFF" "#000000"
+
+makemirror "$B" "top" "$B.topmirror.png"
+makemirror "$B" "bottom" "$B.bottommirror.png"
+
+echo "Creating top textures"
+maketexture "$B" "top" "$ENIG" "$RED" "$REDS" "$B.top-red-enig.png"
+maketexture "$B" "top" "$ENIG" "$GREEN" "$GREENS" "$B.top-green-enig.png"
+maketexture "$B" "top" "$ENIG" "$BLUE" "$BLUES" "$B.top-blue-enig.png"
+maketexture "$B" "top" "$HASL" "$RED" "$REDS" "$B.top-red-hasl.png"
+maketexture "$B" "top" "$HASL" "$GREEN" "$GREENS" "$B.top-green-hasl.png"
+maketexture "$B" "top" "$HASL" "$BLUE" "$BLUES" "$B.top-blue-hasl.png"
+
+echo "Creating bottom textures"
+maketexture "$B" "bottom" "$ENIG" "$RED" "$REDS" "$B.bottom-red-enig.png"
+maketexture "$B" "bottom" "$ENIG" "$GREEN" "$GREENS" "$B.bottom-green-enig.png"
+maketexture "$B" "bottom" "$ENIG" "$BLUE" "$BLUES" "$B.bottom-blue-enig.png"
+maketexture "$B" "bottom" "$HASL" "$RED" "$REDS" "$B.bottom-red-hasl.png"
+maketexture "$B" "bottom" "$HASL" "$GREEN" "$GREENS" "$B.bottom-green-hasl.png"
+maketexture "$B" "bottom" "$HASL" "$BLUE" "$BLUES" "$B.bottom-blue-hasl.png"
+
+# And calculate bump maps
+echo "Making bump maps"
+convert -background black "$B.top.png" "$B.topsilk.png" -flatten "$B.topbump.png"
+convert -background black "$B.bottom.png" "$B.bottomsilk.png" -flatten "$B.bottombump.png"
+
+echo "Generating board shape"
+gerbv --border=0 --dpi=$RES --export=svg "$B.outline.gbr" --output="$B.outline.svg" --foreground='#CC0000' --background='#000000'
