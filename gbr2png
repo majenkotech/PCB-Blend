@@ -64,18 +64,13 @@ function makemirror() {
 
 B=$1
 
-if [ -z "$B" ]; then
-    echo "Usage: $0 <Gerber Basei Name>"
-    exit 10
-fi
-
 makeimg "$B" "top" "#FFFFFF" "#000000"
 makeimg "$B" "bottom" "#FFFFFF" "#000000"
 makeimg "$B" "topsilk" "#FFFFFF" "#000000"
-color "$B.topsilk.png" "white" "#FFFFFF"
+color "$B.topsilk.png" "#aaaaaa" "#FFFFFF"
 transparent "$B.topsilk.png" "black"
 makeimg "$B" "bottomsilk" "#FFFFFF" "#000000"
-color "$B.bottomsilk.png" "white" "#FFFFFF"
+color "$B.bottomsilk.png" "#aaaaaa" "#FFFFFF"
 transparent "$B.bottomsilk.png" "black"
 
 makeimg "$B" "topmask" "#FFFFFF" "#000000"
