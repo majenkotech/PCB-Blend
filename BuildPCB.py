@@ -1,18 +1,31 @@
 import bpy
 import csv
 import sys
+import re
 
-file_root       = "/home/matt/Dropbox/Projects/PulseRifle3/ProgrammingBoard/"
-file_outline    = file_root + "ProgrammingBoard.outline.svg"
-file_drill      = file_root + "ProgrammingBoard.plated-drill.cnc"
-file_csv        = file_root + "ProgrammingBoard.xy"
+file_root       = "/home/matt/Dropbox/Projects/AutoPowerSwitch/Gerber"
+file_name       = "AutoPowerSwitch"
 file_components = "/home/matt/Dropbox/gEDA/Models/components.blend"
 
-offset_x = 0.2
-offset_y = 17.7
+file_outline    = file_root + "/" + file_name + ".outline.svg"
+file_outlinegbr = file_root + "/" + file_name + ".outline.gbr"
+file_drill      = file_root + "/" + file_name + ".plated-drill.cnc"
+file_csv        = file_root + "/" + file_name + ".xy"
+
+m = [re.findall(r'\*X(\d+)Y(\d+)D', line)
+    for line in open(file_outlinegbr)]
+
+offset_x = 0
+offset_y = 0
+
+for i in m:
+    if (len(i) > 0):
+        offset_x = int(i[0][0]) / 1000.0
+        offset_y = int(i[0][1]) / 1000.0
+
 
 rotations = {
-    "U1" : 360,
+
 }
 
 
@@ -228,4 +241,5 @@ for id, name, value, x, y, rot, side in layout_table:
     frot = frot / 57.2957795
     zrot = tuple(float(val) for val in (0, yrot, frot))
     create_dupli(id, name, loc, zrot)
+
 
