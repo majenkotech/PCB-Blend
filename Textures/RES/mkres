@@ -1,0 +1,23 @@
+#!/usr/bin/php
+<?php
+
+$vals = array(
+    000, 100, 150, 180, 220, 240, 270, 330, 470, 510, 560, 680, 822
+);
+
+foreach ($vals as $v) {
+
+
+    for ($i = 0; $i < 10; $i++) {
+        $res = sprintf("%03d", $v + $i);
+        $img = ImageCreateTrueColor(1024, 1024);
+
+        $black = ImageColorAllocate($img, 0, 0, 0);
+        $white = ImageColorAllocate($img, 255, 255, 255);
+
+        ImageFTText($img, 500, 0, 200, 750, $white, "./square-deal.ttf", $res);
+
+        ImagePNG($img, "RES-" . $res . ".png");
+        ImageDestroy($img);
+    }
+}
