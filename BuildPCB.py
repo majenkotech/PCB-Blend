@@ -2,11 +2,15 @@ import bpy
 import csv
 import sys
 import os
+from mathutils import Vector, Matrix, Quaternion
+
 
 file_root       = "/home/matt/Dropbox/Projects/Marek/Mainboard/Gerber/"
 file_name       = "Mainboard"
+color           = "black-enig"
+
 offset_x = 10
-offset_y = 40
+offset_y = 40.16
 file_outline    = file_root + file_name + ".outline.svg"
 file_drill      = file_root + file_name + ".plated-drill.cnc"
 file_csv        = file_root + file_name + ".xy"
@@ -14,17 +18,64 @@ file_components = "/home/matt/Dropbox/gEDA/Models/components.blend"
 component_root = "/home/matt/Dropbox/gEDA/Models/components"
 
 rotations = {
-    "U7" : 360,
-    "CONN1" : 90,
-    "CONN2" : 270,
-    "CONN5" : 270
+
 }
+
+
+
+print(bpy.context.window)
+
+
+def NormalInDirection( normal, direction, limit = 0.5 ):
+    return direction.dot( normal ) > limit
+
+def GoingUp( normal, limit = 0.5 ):
+    return NormalInDirection( normal, Vector( (0, 0, 1 ) ), limit )
+
+def GoingDown( normal, limit = 0.5 ):
+    return NormalInDirection( normal, Vector( (0, 0, -1 ) ), limit )
+
+def GoingLeft( normal, limit = 0.5 ):
+    return NormalInDirection( normal, Vector( (-1, 0, 0) ), limit)
+
+def GoingRight( normal, limit = 0.5 ):
+    return NormalInDirection( normal, Vector( (1, 0, 0) ), limit)
+
+def GoingFore( normal, limit = 0.5 ):
+    return NormalInDirection( normal, Vector( (0, 1, 0) ), limit)
+
+def GoingBack( normal, limit = 0.5 ):
+    return NormalInDirection( normal, Vector( (0, -1, 0) ), limit)
+
+def GoingSide( normal, limit = 0.5 ):
+    return GoingUp( normal, limit ) == False and GoingDown( normal, limit ) == False
+
+
+
 
 txt = bpy.data.texts.get("BuildReport.txt")
 if not txt:
     txt = bpy.data.texts.new("BuildReport.txt")
 txt.clear()
 
+for m in bpy.data.materials:
+    if (m.users == 0):
+        bpy.data.materials.remove(m)
+
+for m in bpy.data.meshes:
+    if (m.users == 0):
+        bpy.data.meshes.remove(m)
+
+print("START")
+
+bpy.ops.object.select_all(action='DESELECT')
+
+for ob in bpy.data.objects:
+    if ob.name == file_name:
+        ob.select = True
+        bpy.ops.object.delete()
+
+bpy.ops.object.select_all(action='DESELECT')
 
 def subtract(target, opObj):
    bpy.ops.object.select_all(action='DESELECT')
@@ -91,6 +142,55 @@ if not gotPCB:
     pcb = bpy.context.object
     pcb.name = 'PCB'
     pcb.location = [offset_x, offset_y, -1.6]
+
+
+    with bpy.data.libraries.load(component_root + "/materials.blend", link=True) as (data_from, data_to):
+        data_to.materials = ["Metal", "Image Textured Surface", "PCB Substrate"]
+
+    top = None
+    try:
+        top = bpy.data.materials['PCB Top']
+    except:
+        top = bpy.data.materials['Image Textured Surface'].copy();
+        top.name = "PCB Top"
+
+    btm = None
+    try:
+        btm = bpy.data.materials['PCB Bottom']
+    except:
+        btm = bpy.data.materials['Image Textured Surface'].copy();
+        btm.name = "PCB Bottom"
+        
+
+    top.node_tree.nodes['imagemap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".top-" + color + ".png")
+    top.node_tree.nodes['bumpmap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".topbump.png")
+    top.node_tree.nodes['mirrormap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".topmirror.png")
+
+    btm.node_tree.nodes['imagemap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".bottom-" + color + ".png")
+    btm.node_tree.nodes['bumpmap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".bottombump.png")
+    btm.node_tree.nodes['mirrormap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".bottommirror.png")
+                
+    pcb.data.materials.append(bpy.data.materials['Metal'])
+    pcb.data.materials.append(top)
+    pcb.data.materials.append(btm)
+    pcb.data.materials.append(bpy.data.materials['PCB Substrate'])
+    bpy.data.materials.remove(bpy.data.materials['SVGMat'])
+
+    
+
+    bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+    for face in pcb.data.polygons:
+        face.select = GoingSide(face.normal)        
+    pcb.active_material_index = 3
+    bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+    bpy.ops.object.material_slot_assign()
+
+    bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
+
+
+
+
     with open(file_drill, newline='', encoding='ISO-8859-15') as f:
         content = f.read().splitlines()
     drills = {}
@@ -123,7 +223,9 @@ if not gotPCB:
                 newbit.dimensions=[drillWidth,drillWidth,50]
                 bits.append(newbit)
                 newbit.location=[x, y, 0]
+                
     bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+
     bpy.ops.object.select_all(action='DESELECT')
     for abit in bits:
         abit.select = True
@@ -136,10 +238,77 @@ if not gotPCB:
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT')
     bpy.context.scene.objects.active = pcb
-    bpy.ops.object.mode_set(mode='EDIT', toggle=False)
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.uv.smart_project()
     bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
+
+    ctx = None
+    view = None
+    
+    
+    for win in bpy.data.window_managers[0].windows:
+        for a in win.screen.areas:
+            if (a.type == "VIEW_3D"):
+                for s in a.spaces:
+                    if (s.type == "VIEW_3D"):
+                        view = s
+                        for r in a.regions:
+                            if (r.type == "WINDOW"):
+                                ctx = {
+                                    'window': win, 
+                                    'screen': win.screen,
+                                    'area': a,
+                                    'region': r,
+                                    'edit_object': bpy.context.edit_object,
+                                    'scene': bpy.context.scene,
+                                    'blend_data': bpy.context.blend_data
+                                    }
+
+
+    bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+    bpy.ops.mesh.select_all(action='DESELECT')
+    bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
+    for face in pcb.data.polygons:
+        face.select = GoingUp(face.normal)        
+    pcb.active_material_index = 1
+    bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+    bpy.ops.object.material_slot_assign()
+    view.region_3d.view_rotation = Quaternion((0, 0, 1), 0)
+    bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+
+    for oWindow in bpy.context.window_manager.windows:
+        oScreen = oWindow.screen
+        for oArea in oScreen.areas:
+            if oArea.type == 'VIEW_3D':  
+                for oRegion in oArea.regions:
+                    if oRegion.type == 'WINDOW':
+                        override = {'window': oWindow, 'screen': oScreen, 'area': oArea, 'region': oRegion, 'scene': bpy.context.scene, 'edit_object': bpy.context.edit_object, 'active_object': bpy.context.active_object, 'selected_objects': bpy.context.selected_objects}
+                        bpy.ops.uv.project_from_view(override , camera_bounds=False, correct_aspect=True, scale_to_bounds=True)
+
+    bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+    for face in pcb.data.polygons:
+        face.select = GoingDown(face.normal)        
+    pcb.active_material_index = 2
+    bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+    bpy.ops.object.material_slot_assign()
+    view.region_3d.view_rotation = Quaternion((1, 0, 0), 3.141592653)
+    bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+    for oWindow in bpy.context.window_manager.windows:
+        oScreen = oWindow.screen
+        for oArea in oScreen.areas:
+            if oArea.type == 'VIEW_3D':  
+                for oRegion in oArea.regions:
+                    if oRegion.type == 'WINDOW':
+                        override = {'window': oWindow, 'screen': oScreen, 'area': oArea, 'region': oRegion, 'scene': bpy.context.scene, 'edit_object': bpy.context.edit_object, 'active_object': bpy.context.active_object, 'selected_objects': bpy.context.selected_objects}
+                        bpy.ops.uv.project_from_view(override , camera_bounds=False, correct_aspect=True, scale_to_bounds=True)
+
+    bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+    
+    
+    view.region_3d.view_rotation = Quaternion((1, 0, 0), -0.2991)
+    view.region_3d.view_rotation = Quaternion((0, 1, 0), -0.0781)
+    view.region_3d.view_rotation = Quaternion((0, 0, 1), -0.2403)
+    
 
 # Populate with components
 
@@ -172,13 +341,7 @@ objects_scene = bpy.context.scene.objects
 
 bpy.ops.object.select_all(action='DESELECT')
 
-print("START")
-
-for lib in bpy.data.libraries:
-    lib.reload()
-    
-for mesh in bpy.data.meshes:
-    print(mesh)
+objects = []
 
 for id, name, value, x, y, rot, side in layout_table:
     z = 0
@@ -206,5 +369,28 @@ for id, name, value, x, y, rot, side in layout_table:
     dupli = objects_data.new(oname, mesh)
     dupli.location = loc
     dupli.rotation_euler = zrot
-    objects_scene.link(dupli)
+    objects_scene.link(dupli) 
+    objects.append(oname)
+
+
+bpy.ops.object.select_all(action='DESELECT')
+    
+for ob in objects:
+    bpy.data.objects[ob].select = True
+
+bpy.data.objects['PCB'].select = True
+
+
+
+bpy.context.scene.objects.active = bpy.data.objects['PCB']
+bpy.ops.object.join()
+bpy.context.scene.objects.active = bpy.data.objects['PCB']
+bpy.context.object.data.name = file_name
+bpy.context.object.name = file_name
+
+for m in bpy.data.materials:
+    if (m.users == 0):
+        bpy.data.materials.remove(m)
+
+print("END")
 
