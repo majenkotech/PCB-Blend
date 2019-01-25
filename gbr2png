@@ -2,16 +2,36 @@
 
 RES=2000
 
-RED='#CC0000'
-REDS='#660000'
-GREEN='#00CC00'
-GREENS='#006600'
-BLUE='#0066CC'
-BLUES='#002266'
-ENIG='#DDB500'
-HASL='#888888'
-BLACK='#222222'
-BLACKS='#000000'
+declare -a COLOR
+declare -A MASK
+declare -A SUBSTRATE
+declare -A SILK
+
+COLOR=("red" "green" "blue" "black" "purple")
+MASK[red]='#CC0000'
+MASK[green]='#00AA00'
+MASK[blue]='#0066CC'
+MASK[black]='#222222'
+MASK[purple]='#4b0082'
+
+SUBSTRATE[red]='#660000'
+SUBSTRATE[green]='#004400'
+SUBSTRATE[blue]='#002266'
+SUBSTRATE[black]='#000000'
+SUBSTRATE[purple]='#290060'
+
+SILK[red]="white"
+SILK[green]="white"
+SILK[blue]="white"
+SILK[black]="white"
+SILK[purple]="white"
+
+declare -a FINISH
+declare -A FINISH_COLOR
+
+FINISH=(hasl enig)
+FINISH_COLOR[hasl]="#888888"
+FINISH_COLOR[enig]="#DDB500"
 
 function makeimg() {
     local BASE=$1
@@ -91,39 +111,24 @@ makeimg "$B" "bottommask" "#FFFFFF" "#000000"
 makemirror "$B" "top" "$B.topmirror.png"
 makemirror "$B" "bottom" "$B.bottommirror.png"
 
-echo "Creating top textures"
-maketexture "$B" "top" "$ENIG" "$RED" "$REDS" "$B.top-red-enig.png"
-maketexture "$B" "top" "$ENIG" "$GREEN" "$GREENS" "$B.top-green-enig.png"
-maketexture "$B" "top" "$ENIG" "$BLUE" "$BLUES" "$B.top-blue-enig.png"
-maketexture "$B" "top" "$ENIG" "$BLACK" "$BLACKS" "$B.top-black-enig.png"
-maketexture "$B" "top" "$HASL" "$RED" "$REDS" "$B.top-red-hasl.png"
-maketexture "$B" "top" "$HASL" "$GREEN" "$GREENS" "$B.top-green-hasl.png"
-maketexture "$B" "top" "$HASL" "$BLUE" "$BLUES" "$B.top-blue-hasl.png"
-maketexture "$B" "top" "$HASL" "$BLACK" "$BLACKS" "$B.top-black-hasl.png"
-
-echo "Creating bottom textures"
-maketexture "$B" "bottom" "$ENIG" "$RED" "$REDS" "$B.bottom-red-enig.png"
-fliptexture "$B.bottom-red-enig.png"
-maketexture "$B" "bottom" "$ENIG" "$GREEN" "$GREENS" "$B.bottom-green-enig.png"
-fliptexture "$B.bottom-green-enig.png"
-maketexture "$B" "bottom" "$ENIG" "$BLUE" "$BLUES" "$B.bottom-blue-enig.png"
-fliptexture "$B.bottom-blue-enig.png"
-maketexture "$B" "bottom" "$ENIG" "$BLACK" "$BLACKS" "$B.bottom-black-enig.png"
-fliptexture "$B.bottom-black-enig.png"
-maketexture "$B" "bottom" "$HASL" "$RED" "$REDS" "$B.bottom-red-hasl.png"
-fliptexture "$B.bottom-red-hasl.png"
-maketexture "$B" "bottom" "$HASL" "$GREEN" "$GREENS" "$B.bottom-green-hasl.png"
-fliptexture "$B.bottom-green-hasl.png"
-maketexture "$B" "bottom" "$HASL" "$BLUE" "$BLUES" "$B.bottom-blue-hasl.png"
-fliptexture "$B.bottom-blue-hasl.png"
-maketexture "$B" "bottom" "$HASL" "$BLACK" "$BLACKS" "$B.bottom-black-hasl.png"
-fliptexture "$B.bottom-black-hasl.png"
+echo "Creating textures..."
+for F in ${FINISH[@]}; do
+    for C in ${COLOR[@]}; do
+        echo -n "   $C $F..."
+        maketexture "$B" "top" "${FINISH_COLOR[$F]}" "${MASK[$C]}" "${SUBSTRATE[$C]}" "$B.top-$C-$F.png"
+        maketexture "$B" "bottom" "${FINISH_COLOR[$F]}" "${MASK[$C]}" "${SUBSTRATE[$C]}" "$B.bottom-$C-$F.png"
+        fliptexture "$B.bottom-$C-$F.png"
+        echo "done"
+    done
+done
 
 # And calculate bump maps
 echo "Making bump maps"
 convert -background black "$B.top.png" "$B.topsilk.png" -flatten "$B.topbump.png"
 convert -background black "$B.bottom.png" "$B.bottomsilk.png" -flatten "$B.bottombump.png"
 fliptexture "$B.bottombump.png"
+fliptexture "$B.bottommirror.png"
+fliptexture "$B.bottommask.png"
 
 echo "Generating board shape"
 gerbv --border=0 --dpi=$RES --export=svg "$B.outline.gbr" --output="$B.outline.svg" --foreground='#CC0000' --background='#000000'
