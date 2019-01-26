@@ -1,0 +1,197 @@
+#!/usr/bin/php
+<?php
+
+$opts = getopt("n:");
+
+if (!array_key_exists("n", $opts)) {
+        print "Usage: gentex -n name\n";
+        exit(10);
+}
+
+$name = $opts['n'];
+
+$finish = array(
+    "hasl" => "dddddd",
+    "enig" => "ddb500",
+    "bare" => "B87333"
+);
+
+$colors = array(
+    "red" => array("cc0000", "aa0000", "ffffff"),
+    "green" => array("00aa00", "008800", "ffffff"),
+    "blue" => array("0066cc", "0044aa", "ffffff"),
+    "black" => array("222222", "000000", "ffffff"),
+    "purple" => array("4b0082", "2b0041", "ffffff"),
+    "white" => array("eeeeee", "dddddd", "000000"),
+    "yellow" => array("ffd700", "bdb76b", "000000"),
+    "bare" => array("c6774a", "a9a600", "000000")
+);
+
+print "Converting gerbers ... ";
+generatePreTextures($name);
+print "done\n";
+
+foreach ($finish as $fn=>$fc) {
+    print "Generating $fn: ";
+    foreach ($colors as $cn=>$cp) {
+        print("$cn ... ");
+        generateTexture($name, "top", $cp[0], $cp[1], $cp[2], $fc, $name . ".top-" . $cn . "-" . $fn . ".png");
+        generateTexture($name, "bottom", $cp[0], $cp[1], $cp[2], $fc, $name . ".bottom-" . $cn . "-" . $fn . ".png", true);
+    }
+    print("done\n");
+}
+
+print "Generating maps: bump ... ";
+generateBumpMap($name, "top");
+generateBumpMap($name, "bottom", true);
+
+print "mirror ... ";
+generateMirrorMap($name, "top");
+generateMirrorMap($name, "bottom", true);
+
+print "done\n";
+
+function generateMirrorMap($name, $layer, $flip = false) {
+    $baseimage = ImageCreateFromPng($name . "." . $layer . ".png");
+    $maskimage = ImageCreateFromPng($name . "." . $layer . "mask.png");
+
+    $composite = ImageCreateTruecolor(ImageSX($baseimage) - 12, ImageSY($baseimage) - 12);
+
+    $matt = 0x000000;
+    $dull = 0x444444;
+    $shiny = 0xf8f8f8;
+
+    for ($y = 0; $y < ImageSY($composite); $y++) {
+        $oy = $y;
+        if ($flip) {
+            $oy = ImageSY($composite) - $y;
+        }
+        for ($x = 0; $x < ImageSX($composite); $x++) {
+            // Mask colour
+            $mc = ImageColorAt($maskimage, $x + 6, $y + 6);
+            if ($mc > 0) { // Finish or substrate
+                // Layer colour
+                $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
+                if ($lc > 0) { // Metal
+                    ImageSetPixel($composite, $x, $oy, $shiny);
+                } else { // Substrate
+                    ImageSetPixel($composite, $x, $oy, $matt);
+                }
+            } else { // mask with or without metal, or silk
+                ImageSetPixel($composite, $x, $oy, $dull);
+            }
+        }
+    }
+
+    ImagePNG($composite, $name . "." . $layer . "mirror.png");
+}
+
+
+function generateBumpMap($name, $layer, $flip = false) {
+    $baseimage = ImageCreateFromPng($name . "." . $layer . ".png");
+    $maskimage = ImageCreateFromPng($name . "." . $layer . "mask.png");
+    $silkimage = ImageCreateFromPng($name . "." . $layer . "silk.png");
+
+    $composite = ImageCreateTruecolor(ImageSX($baseimage) - 12, ImageSY($baseimage) - 12);
+
+    $low = 0x000000;
+    $midlow = 0x606060;
+    $mid = 0x808080;
+    $high = 0xffffff;
+
+    for ($y = 0; $y < ImageSY($composite); $y++) {
+        $oy = $y;
+        if ($flip) {
+            $oy = ImageSY($composite) - $y;
+        }
+        for ($x = 0; $x < ImageSX($composite); $x++) {
+            // Mask colour
+            $mc = ImageColorAt($maskimage, $x + 6, $y + 6);
+            if ($mc > 0) { // Finish or substrate
+                // Layer colour
+                $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
+                if ($lc > 0) { // Metal
+                    ImageSetPixel($composite, $x, $oy, $midlow);
+                } else { // Substrate
+                    ImageSetPixel($composite, $x, $oy, $low);
+                }
+            } else { // mask with or without metal, or silk
+                $sc = ImageColorAt($silkimage, $x + 6, $y + 6);
+                if ($sc > 0) {
+                    ImageSetPixel($composite, $x, $oy, $high);
+                } else {
+                    $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
+                    if ($lc > 0) {
+                        ImageSetPixel($composite, $x, $oy, $mid);
+                    } else {
+                        ImageSetPixel($composite, $x, $oy, $low);
+                    }
+                }
+            }
+        }
+    }
+
+    ImagePNG($composite, $name . "." . $layer . "bump.png");
+}
+
+function generateTexture($name, $layer, $mask, $sub, $silk, $finish, $out, $flip = false) {
+    $baseimage = ImageCreateFromPng($name . "." . $layer . ".png");
+    $maskimage = ImageCreateFromPng($name . "." . $layer . "mask.png");
+    $silkimage = ImageCreateFromPng($name . "." . $layer . "silk.png");
+
+    $composite = ImageCreateTruecolor(ImageSX($baseimage) - 12, ImageSY($baseimage) - 12);
+
+    $metalColor = hexdec($finish);
+    $substrateColor = hexdec("a9a600");
+    $maskHighColor = hexdec($mask);
+    $maskLowColor = hexdec($sub);
+    $silkColor = hexdec($silk);
+
+    for ($y = 0; $y < ImageSY($composite); $y++) {
+        $oy = $y;
+        if ($flip) {
+            $oy = ImageSY($composite) - $y;
+        }
+        for ($x = 0; $x < ImageSX($composite); $x++) {
+            // Mask colour
+            $mc = ImageColorAt($maskimage, $x + 6, $y + 6);
+            if ($mc > 0) { // Finish or substrate
+                // Layer colour
+                $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
+                if ($lc > 0) { // Metal
+                    ImageSetPixel($composite, $x, $oy, $metalColor);
+                } else { // Substrate
+                    ImageSetPixel($composite, $x, $oy, $substrateColor);
+                }
+            } else { // mask with or without metal, or silk
+                $sc = ImageColorAt($silkimage, $x + 6, $y + 6);
+                if ($sc > 0) {
+                    ImageSetPixel($composite, $x, $oy, $silkColor);
+                } else {
+                    $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
+                    if ($lc > 0) {
+                        ImageSetPixel($composite, $x, $oy, $maskHighColor);
+                    } else {
+                        ImageSetPixel($composite, $x, $oy, $maskLowColor);
+                    }
+                }
+            }
+        }
+    }
+
+    ImagePNG($composite, $out);
+}
+
+
+function generatePreTextures($name) {
+    generatePreTexture($name, "bottom");
+    generatePreTexture($name, "bottommask");
+    generatePreTexture($name, "bottomsilk");
+    generatePreTexture($name, "top");
+    generatePreTexture($name, "topmask");
+    generatePreTexture($name, "topsilk");
+}
+    
+function generatePreTexture($name, $layer) {
+    system("gerbv --border=0 --dpi=2000 --export=png \"$name.outline.gbr\" \"$name.$layer.gbr\" --output=\"$name.$layer.png\" --foreground='#000000' --foreground='#ffffff' --background='#000000'");
+}

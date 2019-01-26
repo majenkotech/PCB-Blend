@@ -7,10 +7,11 @@ from mathutils import Vector, Matrix, Quaternion
 
 file_root       = "/home/matt/Dropbox/Projects/Marek/Mainboard/Gerber/"
 file_name       = "Mainboard"
-color           = "black-enig"
+color           = "bare"
+finish          = "bare"
 
 offset_x = 10
-offset_y = 40.16
+offset_y = 40
 file_outline    = file_root + file_name + ".outline.svg"
 file_drill      = file_root + file_name + ".plated-drill.cnc"
 file_csv        = file_root + file_name + ".xy"
@@ -58,13 +59,8 @@ if not txt:
     txt = bpy.data.texts.new("BuildReport.txt")
 txt.clear()
 
-for m in bpy.data.materials:
-    if (m.users == 0):
-        bpy.data.materials.remove(m)
 
-for m in bpy.data.meshes:
-    if (m.users == 0):
-        bpy.data.meshes.remove(m)
+ 
 
 print("START")
 
@@ -74,8 +70,23 @@ for ob in bpy.data.objects:
     if ob.name == file_name:
         ob.select = True
         bpy.ops.object.delete()
+        
+       
+bpy.ops.object.select_all(action='DESELECT') 
+        
+for m in bpy.data.materials:
+    if (m.users == 0):
+        bpy.data.materials.remove(m)
 
-bpy.ops.object.select_all(action='DESELECT')
+for m in bpy.data.meshes:
+    if (m.users == 0):
+        bpy.data.meshes.remove(m)
+
+for m in bpy.data.images:
+    if (m.users == 0):
+        bpy.data.images.remove(m)
+
+
 
 def subtract(target, opObj):
    bpy.ops.object.select_all(action='DESELECT')
@@ -162,11 +173,11 @@ if not gotPCB:
         btm.name = "PCB Bottom"
         
 
-    top.node_tree.nodes['imagemap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".top-" + color + ".png")
+    top.node_tree.nodes['imagemap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".top-" + color + "-" + finish + ".png")
     top.node_tree.nodes['bumpmap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".topbump.png")
     top.node_tree.nodes['mirrormap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".topmirror.png")
 
-    btm.node_tree.nodes['imagemap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".bottom-" + color + ".png")
+    btm.node_tree.nodes['imagemap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".bottom-" + color + "-" + finish + ".png")
     btm.node_tree.nodes['bumpmap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".bottombump.png")
     btm.node_tree.nodes['mirrormap'].image = bpy.data.images.load(filepath = file_root + "/" + file_name + ".bottommirror.png")
                 
@@ -283,7 +294,7 @@ if not gotPCB:
                 for oRegion in oArea.regions:
                     if oRegion.type == 'WINDOW':
                         override = {'window': oWindow, 'screen': oScreen, 'area': oArea, 'region': oRegion, 'scene': bpy.context.scene, 'edit_object': bpy.context.edit_object, 'active_object': bpy.context.active_object, 'selected_objects': bpy.context.selected_objects}
-                        bpy.ops.uv.project_from_view(override , camera_bounds=False, correct_aspect=True, scale_to_bounds=True)
+                        bpy.ops.uv.project_from_view(override , camera_bounds=False, correct_aspect=False, scale_to_bounds=True)
 
     bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
     for face in pcb.data.polygons:
@@ -300,7 +311,7 @@ if not gotPCB:
                 for oRegion in oArea.regions:
                     if oRegion.type == 'WINDOW':
                         override = {'window': oWindow, 'screen': oScreen, 'area': oArea, 'region': oRegion, 'scene': bpy.context.scene, 'edit_object': bpy.context.edit_object, 'active_object': bpy.context.active_object, 'selected_objects': bpy.context.selected_objects}
-                        bpy.ops.uv.project_from_view(override , camera_bounds=False, correct_aspect=True, scale_to_bounds=True)
+                        bpy.ops.uv.project_from_view(override , camera_bounds=False, correct_aspect=False, scale_to_bounds=True)
 
     bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
     
