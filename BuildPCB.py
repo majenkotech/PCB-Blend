@@ -7,7 +7,7 @@ from mathutils import Vector, Matrix, Quaternion
 
 file_root       = "/home/matt/Dropbox/Projects/TFTDisplay/Gerber/"
 file_name       = "TFTDisplay"
-color           = "black"
+color           = "blue"
 finish          = "hasl"
 
 offset_x = 2.48
@@ -18,13 +18,7 @@ file_csv        = file_root + file_name + ".xy"
 component_root = "/home/matt/Dropbox/gEDA/Models/components"
 
 rotations = {
-
 }
-
-
-
-print(bpy.context.window)
-
 
 def NormalInDirection( normal, direction, limit = 0.5 ):
     return direction.dot( normal ) > limit
@@ -50,26 +44,74 @@ def GoingBack( normal, limit = 0.5 ):
 def GoingSide( normal, limit = 0.5 ):
     return GoingUp( normal, limit ) == False and GoingDown( normal, limit ) == False
 
+def setViewOrientation(vec, angle = 0):
+    for win in bpy.data.window_managers[0].windows:
+        for a in win.screen.areas:
+            if (a.type == "VIEW_3D"):
+                for s in a.spaces:
+                    if (s.type == "VIEW_3D"):
+                        view = s
+                        s.region_3d.view_rotation = Quaternion(vec, angle)
 
 
+def projectFromView():
+    for oWindow in bpy.context.window_manager.windows:
+        oScreen = oWindow.screen
+        for oArea in oScreen.areas:
+            if oArea.type == 'VIEW_3D':  
+                for oRegion in oArea.regions:
+                    if oRegion.type == 'WINDOW':
+                        override = {'window': oWindow, 'screen': oScreen, 'area': oArea, 'region': oRegion, 'scene': bpy.context.scene, 'edit_object': bpy.context.edit_object, 'active_object': bpy.context.active_object, 'selected_objects': bpy.context.selected_objects}
+                        bpy.ops.uv.project_from_view(override , camera_bounds=False, correct_aspect=False, scale_to_bounds=True)
+
+def drill(target, x, y, size):
+    print("Drilling " + str(x) + "," + str(y) + " @ " + str(size) + "mm")
+    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=size/2, depth=10, location=(x, y, 0))
+    newbit = bpy.context.object
+    bpy.ops.object.select_all(action='DESELECT')
+    target.select = True
+    bpy.context.scene.objects.active = target
+    bpy.ops.object.modifier_add(type='BOOLEAN')
+    mod = target.modifiers.new("Drill", type='BOOLEAN')
+    mod.operation = 'DIFFERENCE'
+    mod.object = newbit
+    bpy.context.scene.update()
+    target.data = target.to_mesh(bpy.context.scene, True, 'PREVIEW')
+    target.modifiers.remove(mod)
+    bpy.data.objects.remove(newbit)
+#    bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+
+def clearMeshSelections():
+    bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+    bpy.ops.mesh.select_all(action='DESELECT')
+    bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
+def setMode(newmode):
+    bpy.ops.object.mode_set(mode=newmode, toggle=False)
+
+def deselectAll():
+    bpy.ops.object.select_all(action='DESELECT')
+    
+def selectAll():
+    bpy.ops.object.select_all(action='SELECT')
+
+#---------------------------
 
 txt = bpy.data.texts.get("BuildReport.txt")
 if not txt:
     txt = bpy.data.texts.new("BuildReport.txt")
 txt.clear()
 
-
- 
-
 print("START")
 
-bpy.ops.object.select_all(action='DESELECT')
+deselectAll()
 
 for ob in bpy.data.objects:
     if ob.name == file_name:
         ob.select = True
         bpy.ops.object.delete()
-        
+
+deselectAll()        
        
 bpy.ops.object.select_all(action='DESELECT') 
         
@@ -86,31 +128,17 @@ for m in bpy.data.images:
         bpy.data.images.remove(m)
 
 
-
-def subtract(target, opObj):
-   bpy.ops.object.select_all(action='DESELECT')
-   target.select = True
-   bpy.context.scene.objects.active = target
-   bpy.ops.object.modifier_add(type='BOOLEAN')
-   mod = target.modifiers.new("Drill", type='BOOLEAN')
-   mod.operation = 'DIFFERENCE'
-   mod.object = opObj
-   bpy.context.scene.update()
-   target.data = target.to_mesh(bpy.context.scene, True, 'PREVIEW')
-   target.modifiers.remove(mod)
-
-
-bpy.ops.object.select_all(action='SELECT')
+selectAll()
 bpy.ops.import_curve.svg(filepath = file_outline)
 newcurves = [c for c in bpy.context.scene.objects if not c.select]
-bpy.ops.object.select_all(action='DESELECT')
+deselectAll()
 for c in newcurves:
     c.select = True
 bpy.context.scene.objects.active = newcurves[0]
 bpy.ops.object.join()
 curve = bpy.context.object
 bpy.ops.object.convert(target='MESH')
-bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+setMode('EDIT')
 bpy.ops.mesh.select_all(action='SELECT')
 bpy.ops.mesh.remove_doubles(threshold=0.01)
 bpy.ops.mesh.extrude_edges_move(
@@ -190,89 +218,12 @@ for face in pcb.data.polygons:
 pcb.active_material_index = 3
 bpy.ops.object.mode_set(mode='EDIT', toggle=False)
 bpy.ops.object.material_slot_assign()
-
 bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
 
+clearMeshSelections()
 
-
-
-
-
-
-
-ctx = None
-view = None
-
-
-for win in bpy.data.window_managers[0].windows:
-    for a in win.screen.areas:
-        if (a.type == "VIEW_3D"):
-            for s in a.spaces:
-                if (s.type == "VIEW_3D"):
-                    view = s
-                    for r in a.regions:
-                        if (r.type == "WINDOW"):
-                            ctx = {
-                                'window': win, 
-                                'screen': win.screen,
-                                'area': a,
-                                'region': r,
-                                'edit_object': bpy.context.edit_object,
-                                'scene': bpy.context.scene,
-                                'blend_data': bpy.context.blend_data
-                                }
-
-
-bpy.ops.object.mode_set(mode='EDIT', toggle=False)
-bpy.ops.mesh.select_all(action='DESELECT')
-bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
-
-for face in pcb.data.polygons:
-    face.select = GoingUp(face.normal)        
-pcb.active_material_index = 1
-bpy.ops.object.mode_set(mode='EDIT', toggle=False)
-bpy.ops.object.material_slot_assign()
-view.region_3d.view_rotation = Quaternion((0, 0, 1), 0)
-bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
-
-for oWindow in bpy.context.window_manager.windows:
-    oScreen = oWindow.screen
-    for oArea in oScreen.areas:
-        if oArea.type == 'VIEW_3D':  
-            for oRegion in oArea.regions:
-                if oRegion.type == 'WINDOW':
-                    override = {'window': oWindow, 'screen': oScreen, 'area': oArea, 'region': oRegion, 'scene': bpy.context.scene, 'edit_object': bpy.context.edit_object, 'active_object': bpy.context.active_object, 'selected_objects': bpy.context.selected_objects}
-                    bpy.ops.uv.project_from_view(override , camera_bounds=False, correct_aspect=False, scale_to_bounds=True)
-bpy.ops.mesh.select_all(action='DESELECT')
-
-
-bpy.ops.object.mode_set(mode='OBJECT', toggle=False)    
-for face in pcb.data.polygons:
-    face.select = GoingDown(face.normal)        
-pcb.active_material_index = 2
-bpy.ops.object.mode_set(mode='EDIT', toggle=False)
-bpy.ops.object.material_slot_assign()
-view.region_3d.view_rotation = Quaternion((1, 0, 0), 3.141592653)
-bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
-for oWindow in bpy.context.window_manager.windows:
-    oScreen = oWindow.screen
-    for oArea in oScreen.areas:
-        if oArea.type == 'VIEW_3D':  
-            for oRegion in oArea.regions:
-                if oRegion.type == 'WINDOW':
-                    override = {'window': oWindow, 'screen': oScreen, 'area': oArea, 'region': oRegion, 'scene': bpy.context.scene, 'edit_object': bpy.context.edit_object, 'active_object': bpy.context.active_object, 'selected_objects': bpy.context.selected_objects}
-                    bpy.ops.uv.project_from_view(override , camera_bounds=False, correct_aspect=False, scale_to_bounds=True)
-
-bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
-
-
-view.region_3d.view_rotation = Quaternion((1, 0, 0), -0.2991)
-view.region_3d.view_rotation = Quaternion((0, 1, 0), -0.0781)
-view.region_3d.view_rotation = Quaternion((0, 0, 1), -0.2403)
 
 # Drill it
-
-
 
 
 with open(file_drill, newline='', encoding='ISO-8859-15') as f:
@@ -301,27 +252,45 @@ for line in content:
             y = float(coords[1])
             x = x / 1000
             y = y / 1000
-            bpy.ops.mesh.primitive_cylinder_add()
-            newbit = bpy.context.object
-            newbit.name="Drill Bit." + str(nbits)
-            newbit.dimensions=[drillWidth,drillWidth,50]
-            bits.append(newbit)
-            newbit.location=[x, y, 0]
-            
+            drill(pcb, x, y, drillWidth)
+
+
+clearMeshSelections()
+
+for face in pcb.data.polygons:
+    face.select = GoingUp(face.normal)        
+pcb.active_material_index = 1
+
+bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+bpy.ops.object.material_slot_assign()
+setViewOrientation((0, 0, 1))
+bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+projectFromView()
+bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
+
+
+clearMeshSelections()
+
+for face in pcb.data.polygons:
+    face.select = GoingDown(face.normal)        
+pcb.active_material_index = 2
+
+bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+bpy.ops.object.material_slot_assign()
+setViewOrientation((1, 0, 0), 3.141592653)
+bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+projectFromView()
+bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
+setViewOrientation((1, 0, 0), -0.2991)
+setViewOrientation((0, 1, 0), -0.0781)
+setViewOrientation((0, 0, 1), -0.2403)
+
+
 bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
 bpy.ops.object.select_all(action='DESELECT')
-for abit in bits:
-    abit.select = True
-bpy.context.scene.objects.active = bits[0]
-bpy.ops.object.join()
-allbits = bpy.context.object
-subtract(pcb, allbits)
-bpy.ops.object.select_all(action='DESELECT')
-allbits.select = True
-bpy.ops.object.delete()
-bpy.ops.object.select_all(action='DESELECT')
-bpy.context.scene.objects.active = pcb
 bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
 
 
@@ -397,17 +366,16 @@ for ob in objects:
 bpy.data.objects['PCB'].select = True
 
 
-
 bpy.context.scene.objects.active = bpy.data.objects['PCB']
 bpy.ops.object.join()
 bpy.context.scene.objects.active = bpy.data.objects['PCB']
 bpy.context.object.data.name = file_name
 bpy.context.object.name = file_name
 
+bpy.ops.object.origin_set(type='ORIGIN_CENTER_OF_MASS')
+
 for m in bpy.data.materials:
     if (m.users == 0):
         bpy.data.materials.remove(m)
 
 print("END")
-
-
