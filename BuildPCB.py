@@ -15,7 +15,6 @@ offset_y = 124.55
 file_outline    = file_root + file_name + ".outline.svg"
 file_drill      = file_root + file_name + ".plated-drill.cnc"
 file_csv        = file_root + file_name + ".xy"
-file_components = "/home/matt/Dropbox/gEDA/Models/components.blend"
 component_root = "/home/matt/Dropbox/gEDA/Models/components"
 
 rotations = {
