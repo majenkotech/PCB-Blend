@@ -29,6 +29,7 @@ $colors = array(
 
 print "Converting gerbers ... ";
 generatePreTextures($name);
+system("gerbv --border=0 --export=svg \"$name.outline.gbr\" --output=\"$name.outline.svg\" --foreground='#CC0000' --background='#000000' --dpi=72000");
 print "done\n";
 
 foreach ($finish as $fn=>$fc) {
@@ -49,7 +50,46 @@ print "mirror ... ";
 generateMirrorMap($name, "top");
 generateMirrorMap($name, "bottom", true);
 
+print "translucency ... ";
+generateTranslucentMap($name, "top");
+generateTranslucentMap($name, "bottom", true);
+
 print "done\n";
+
+function generateTranslucentMap($name, $layer, $flip = false) {
+    $baseimage = ImageCreateFromPng($name . "." . $layer . ".png");
+    $maskimage = ImageCreateFromPng($name . "." . $layer . "mask.png");
+
+    $composite = ImageCreateTruecolor(ImageSX($baseimage) - 12, ImageSY($baseimage) - 12);
+
+    $solid = 0x000000;
+    $translucent = 0xffffff;
+
+    for ($y = 0; $y < ImageSY($composite); $y++) {
+        $oy = $y;
+        if ($flip) {
+            $oy = ImageSY($composite) - $y;
+        }
+        for ($x = 0; $x < ImageSX($composite); $x++) {
+            // Mask colour
+            $mc = ImageColorAt($maskimage, $x + 6, $y + 6);
+            if ($mc > 0) { // Finish or substrate
+                // Layer colour
+                $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
+                if ($lc > 0) { // Metal
+                    ImageSetPixel($composite, $x, $oy, $solid);
+                } else { // Substrate
+                    ImageSetPixel($composite, $x, $oy, $translucent);
+                }
+            } else { // mask with or without metal, or silk
+                ImageSetPixel($composite, $x, $oy, $solid);
+            }
+        }
+    }
+
+    ImagePNG($composite, $name . "." . $layer . "translucency.png");
+}
+
 
 function generateMirrorMap($name, $layer, $flip = false) {
     $baseimage = ImageCreateFromPng($name . "." . $layer . ".png");
