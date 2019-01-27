@@ -21,6 +21,6 @@ Steps to use
 4. Load Blender and switch to the Cycles renderer.
 5. Load the BuldPCB.py file into the text editor pane
 6. Edit the settings and paths at the top of the file to suit your setup and desires
-7. Run the sript, sit back, and watch as the board is created in front of your eyes
+7. Run the sript (make sure you have a normal 3D View open), sit back, and watch as the board is created in front of your eyes
 
 ... or it fails with an error.
