@@ -10,218 +10,18 @@ if (!array_key_exists("n", $opts)) {
 
 $name = $opts['n'];
 
-$finish = array(
-    "hasl" => "dddddd",
-    "enig" => "ddb500",
-    "bare" => "B87333"
-);
-
-$colors = array(
-    "red" => array("cc0000", "aa0000", "ffffff"),
-    "green" => array("00aa00", "008800", "ffffff"),
-    "blue" => array("0066cc", "0044aa", "ffffff"),
-    "black" => array("222222", "000000", "ffffff"),
-    "purple" => array("4b0082", "2b0041", "ffffff"),
-    "white" => array("eeeeee", "dddddd", "000000"),
-    "yellow" => array("ffd700", "bdb76b", "000000"),
-    "bare" => array("c6774a", "a9a600", "000000")
-);
-
 print "Converting gerbers ... ";
 generatePreTextures($name);
-system("gerbv --border=0 --export=svg \"$name.outline.gbr\" --output=\"$name.outline.svg\" --foreground='#CC0000' --background='#000000' --dpi=72000");
-print "done\n";
+system("gerbv --border=0 --export=svg \"$name.outline.gbr\" --output=\"$name.outline-segmented.svg\" --foreground='#CC0000' --background='#000000' --dpi=72000");
+compactOutline("$name.outline-segmented.svg", "$name.outline.svg");
 
-foreach ($finish as $fn=>$fc) {
-    print "Generating $fn: ";
-    foreach ($colors as $cn=>$cp) {
-        print("$cn ... ");
-        generateTexture($name, "top", $cp[0], $cp[1], $cp[2], $fc, $name . ".top-" . $cn . "-" . $fn . ".png");
-        generateTexture($name, "bottom", $cp[0], $cp[1], $cp[2], $fc, $name . ".bottom-" . $cn . "-" . $fn . ".png", true);
-    }
-    print("done\n");
-}
+$topOffset = getSilkOffset($name, "top");
+$bottomOffset = getSilkOffset($name, "bottom");
 
-print "Generating maps: bump ... ";
-generateBumpMap($name, "top");
-generateBumpMap($name, "bottom", true);
-
-print "mirror ... ";
-generateMirrorMap($name, "top");
-generateMirrorMap($name, "bottom", true);
-
-print "translucency ... ";
-generateTranslucentMap($name, "top");
-generateTranslucentMap($name, "bottom", true);
+createCroppedSilk($name, "top", $topOffset);
+createCroppedSilk($name, "bottom", $bottomOffset);
 
 print "done\n";
-
-function generateTranslucentMap($name, $layer, $flip = false) {
-    $baseimage = ImageCreateFromPng($name . "." . $layer . ".png");
-    $maskimage = ImageCreateFromPng($name . "." . $layer . "mask.png");
-
-    $composite = ImageCreateTruecolor(ImageSX($baseimage) - 12, ImageSY($baseimage) - 12);
-
-    $solid = 0x000000;
-    $translucent = 0xffffff;
-
-    for ($y = 0; $y < ImageSY($composite); $y++) {
-        $oy = $y;
-        if ($flip) {
-            $oy = ImageSY($composite) - $y;
-        }
-        for ($x = 0; $x < ImageSX($composite); $x++) {
-            // Mask colour
-            $mc = ImageColorAt($maskimage, $x + 6, $y + 6);
-            if ($mc > 0) { // Finish or substrate
-                // Layer colour
-                $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
-                if ($lc > 0) { // Metal
-                    ImageSetPixel($composite, $x, $oy, $solid);
-                } else { // Substrate
-                    ImageSetPixel($composite, $x, $oy, $translucent);
-                }
-            } else { // mask with or without metal, or silk
-                ImageSetPixel($composite, $x, $oy, $solid);
-            }
-        }
-    }
-
-    ImagePNG($composite, $name . "." . $layer . "translucency.png");
-}
-
-
-function generateMirrorMap($name, $layer, $flip = false) {
-    $baseimage = ImageCreateFromPng($name . "." . $layer . ".png");
-    $maskimage = ImageCreateFromPng($name . "." . $layer . "mask.png");
-
-    $composite = ImageCreateTruecolor(ImageSX($baseimage) - 12, ImageSY($baseimage) - 12);
-
-    $matt = 0x000000;
-    $dull = 0x444444;
-    $shiny = 0xf8f8f8;
-
-    for ($y = 0; $y < ImageSY($composite); $y++) {
-        $oy = $y;
-        if ($flip) {
-            $oy = ImageSY($composite) - $y;
-        }
-        for ($x = 0; $x < ImageSX($composite); $x++) {
-            // Mask colour
-            $mc = ImageColorAt($maskimage, $x + 6, $y + 6);
-            if ($mc > 0) { // Finish or substrate
-                // Layer colour
-                $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
-                if ($lc > 0) { // Metal
-                    ImageSetPixel($composite, $x, $oy, $shiny);
-                } else { // Substrate
-                    ImageSetPixel($composite, $x, $oy, $matt);
-                }
-            } else { // mask with or without metal, or silk
-                ImageSetPixel($composite, $x, $oy, $dull);
-            }
-        }
-    }
-
-    ImagePNG($composite, $name . "." . $layer . "mirror.png");
-}
-
-
-function generateBumpMap($name, $layer, $flip = false) {
-    $baseimage = ImageCreateFromPng($name . "." . $layer . ".png");
-    $maskimage = ImageCreateFromPng($name . "." . $layer . "mask.png");
-    $silkimage = ImageCreateFromPng($name . "." . $layer . "silk.png");
-
-    $composite = ImageCreateTruecolor(ImageSX($baseimage) - 12, ImageSY($baseimage) - 12);
-
-    $low = 0x000000;
-    $midlow = 0x606060;
-    $mid = 0x808080;
-    $high = 0xffffff;
-
-    for ($y = 0; $y < ImageSY($composite); $y++) {
-        $oy = $y;
-        if ($flip) {
-            $oy = ImageSY($composite) - $y;
-        }
-        for ($x = 0; $x < ImageSX($composite); $x++) {
-            // Mask colour
-            $mc = ImageColorAt($maskimage, $x + 6, $y + 6);
-            if ($mc > 0) { // Finish or substrate
-                // Layer colour
-                $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
-                if ($lc > 0) { // Metal
-                    ImageSetPixel($composite, $x, $oy, $midlow);
-                } else { // Substrate
-                    ImageSetPixel($composite, $x, $oy, $low);
-                }
-            } else { // mask with or without metal, or silk
-                $sc = ImageColorAt($silkimage, $x + 6, $y + 6);
-                if ($sc > 0) {
-                    ImageSetPixel($composite, $x, $oy, $high);
-                } else {
-                    $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
-                    if ($lc > 0) {
-                        ImageSetPixel($composite, $x, $oy, $mid);
-                    } else {
-                        ImageSetPixel($composite, $x, $oy, $low);
-                    }
-                }
-            }
-        }
-    }
-
-    ImagePNG($composite, $name . "." . $layer . "bump.png");
-}
-
-function generateTexture($name, $layer, $mask, $sub, $silk, $finish, $out, $flip = false) {
-    $baseimage = ImageCreateFromPng($name . "." . $layer . ".png");
-    $maskimage = ImageCreateFromPng($name . "." . $layer . "mask.png");
-    $silkimage = ImageCreateFromPng($name . "." . $layer . "silk.png");
-
-    $composite = ImageCreateTruecolor(ImageSX($baseimage) - 12, ImageSY($baseimage) - 12);
-
-    $metalColor = hexdec($finish);
-    $substrateColor = hexdec("a9a600");
-    $maskHighColor = hexdec($mask);
-    $maskLowColor = hexdec($sub);
-    $silkColor = hexdec($silk);
-
-    for ($y = 0; $y < ImageSY($composite); $y++) {
-        $oy = $y;
-        if ($flip) {
-            $oy = ImageSY($composite) - $y;
-        }
-        for ($x = 0; $x < ImageSX($composite); $x++) {
-            // Mask colour
-            $mc = ImageColorAt($maskimage, $x + 6, $y + 6);
-            if ($mc > 0) { // Finish or substrate
-                // Layer colour
-                $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
-                if ($lc > 0) { // Metal
-                    ImageSetPixel($composite, $x, $oy, $metalColor);
-                } else { // Substrate
-                    ImageSetPixel($composite, $x, $oy, $substrateColor);
-                }
-            } else { // mask with or without metal, or silk
-                $sc = ImageColorAt($silkimage, $x + 6, $y + 6);
-                if ($sc > 0) {
-                    ImageSetPixel($composite, $x, $oy, $silkColor);
-                } else {
-                    $lc = ImageColorAt($baseimage, $x + 6, $y + 6);
-                    if ($lc > 0) {
-                        ImageSetPixel($composite, $x, $oy, $maskHighColor);
-                    } else {
-                        ImageSetPixel($composite, $x, $oy, $maskLowColor);
-                    }
-                }
-            }
-        }
-    }
-
-    ImagePNG($composite, $out);
-}
-
 
 function generatePreTextures($name) {
     generatePreTexture($name, "bottom");
@@ -234,4 +34,191 @@ function generatePreTextures($name) {
     
 function generatePreTexture($name, $layer) {
     system("gerbv --border=0 --dpi=2000 --export=png \"$name.outline.gbr\" \"$name.$layer.gbr\" --output=\"$name.$layer.png\" --foreground='#000000' --foreground='#ffffff' --background='#000000'");
+}
+
+function getSilkOffset($name, $layer) {
+    system("gerbv --border=0 --dpi=2000 --export=png \"$name.outline.gbr\" \"$name.$layer" . "silk.gbr\" --output=\"$name.$layer" . "silk-outline.png\" --foreground='#ff0000' --foreground='#ffffff' --background='#000000'");
+
+    $img = ImageCreateFromPNG("$name.$layer" . "silk-outline.png");
+
+    $sx = 99999;
+    $sy = 99999;
+
+    for ($y = 0; $y < ImageSY($img); $y++) {
+        for ($x = 0; $x < ImageSX($img); $x++) {
+            $rgb = ImageColorAt($img, $x, $y);
+            if ($rgb == 0xB10000) {
+                if ($x < $sx) $sx = $x;
+                if ($y < $sy) $sy = $y;
+            }
+        }
+    }
+    return array($sx, $sy);
+}
+
+function compactOutline($in, $out) {
+    $doc = new DOMDocument();
+    $doc->load($in);
+
+    $paths = $doc->getElementsByTagName("path");
+
+    $pathobjects = array();
+
+    $transform = "";
+    $style = "";
+
+    $svg = $doc->getElementsByTagName("svg")->item(0);
+
+    foreach ($paths as $path) {
+        $pathdata = $path->getAttribute("d");
+        $transform = $path->getAttribute("transform");
+        $style = $path->getAttribute("style");
+        $ob = parsePathData($pathdata);
+        $pathobjects[] = $ob;
+    }
+
+    $orderedPaths = array();
+
+    $orderedPaths[] = array_shift($pathobjects);
+
+    while (count($pathobjects) > 0) {
+
+        $lastObject = $orderedPaths[count($orderedPaths)-1];
+
+        $foundone = false;
+        $unmatched = array();
+        foreach ($pathobjects as $po) {
+            if (!$foundone) {
+                if (($po->start->x == $lastObject->end->x) && ($po->start->y == $lastObject->end->y)) {
+                    $foundone = true;
+                    $orderedPaths[] = $po;
+                } else if (($po->end->x == $lastObject->end->x) && ($po->end->y == $lastObject->end->y)) {
+                    $s = $po->start;
+                    $po->start = $po->end;
+                    $po->end = $s;
+                    if ($po->type == "C") {
+                        $cp = $po->cp0;
+                        $po->cp0 = $po->cp1;
+                        $po->cp1 = $cp;
+                    }
+                    $foundone = true;
+                    $orderedPaths[] = $po;
+                } else {
+                    $unmatched[] = $po;
+                }
+            } else {
+                $unmatched[] = $po;
+            }
+        }
+        $pathobjects = $unmatched;
+        if (!$foundone) {
+            print("Error: Nothing found, but objects still exist.");
+            break;
+        }
+    }
+
+    $data = array();
+    $last = "";
+
+    foreach ($orderedPaths as $path) {
+        if ($last == "") {
+            $data[] = "M";
+            $data[] = $path->start->x;
+            $data[] = $path->start->y;
+        }
+
+        switch ($path->type) {
+            case 'L':
+                if ($last != "L") {
+                    $data[] = "L";
+                }
+                $data[] = $path->end->x;
+                $data[] = $path->end->y;
+                break;
+            case 'C':
+                $data[] = "C";
+                $data[] = $path->cp0->x;
+                $data[] = $path->cp0->y;
+                $data[] = $path->cp1->x;
+                $data[] = $path->cp1->y;
+                $data[] = $path->end->x;
+                $data[] = $path->end->y;
+                break;
+        }
+
+        $last = $path->type;
+    }
+
+    $data[] = "Z";
+
+    $width = $svg->getAttribute("width");
+    $height = $svg->getAttribute("height");
+    $vb = $svg->getAttribute("viewBox");
+
+    $o = array();
+
+    $o[] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
+    $o[] = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"$width\" height=\"$height\" viewBox=\"$vb\" version=\"1.1\">";
+    $o[] = "<g id=\"surface1\">";
+    $o[] = "<path style=\"$style\" d=\"" . implode(" ", $data) . "\" transform=\"$transform\"/>";
+    $o[] = "</g>";
+    $o[] = "</svg>";
+
+    file_put_contents($out, implode("\n", $o));
+}
+
+function parsePathData($pd) {
+    $data = explode(" ", $pd);
+    $ob = new stdClass;
+
+    while (count($data) > 0) {
+        $bit = array_shift($data);
+
+        switch ($bit) {
+            case 'M': // Moveto
+                $ob->start = new stdClass;
+                $ob->start->x = array_shift($data);
+                $ob->start->y = array_shift($data);
+                break;
+
+            case 'L': // Lineto
+                $ob->end = new stdClass;
+                $ob->end->x = array_shift($data);
+                $ob->end->y = array_shift($data);
+                $ob->type = 'L';
+                break;
+
+            case 'C': // Circleto
+                $ob->cp0 = new stdClass;
+                $ob->cp0->x = array_shift($data);
+                $ob->cp0->y = array_shift($data);
+                $ob->cp1 = new stdClass;
+                $ob->cp1->x = array_shift($data);
+                $ob->cp1->y = array_shift($data);
+                $ob->end = new stdClass;
+                $ob->end->x = array_shift($data);
+                $ob->end->y = array_shift($data);
+                $ob->type = 'C';
+                break;
+        }
+    }
+
+    return $ob;
+}
+
+function createCroppedSilk($name, $layer, $offset) {
+    $ox = $offset[0];
+    $oy = $offset[1];
+
+    $t = ImageCreateFromPNG($name . ".top.png");
+    $sx = ImageSX($t);
+    $sy = ImageSY($t);
+
+    $silk = ImageCreateFromPNG($name . "." . $layer . "silk.png");
+
+
+    $out = ImageCreateTrueColor($sx, $sy);
+    ImageCopy($out, $silk, 0, 0, $ox, $oy, $sx, $sy);
+
+    ImagePNG($out, $name . "." . $layer . "silk-cropped.png");
 }

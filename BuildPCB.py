@@ -29,13 +29,13 @@ yellow = (0.814, 0.429, 0.0, 1.0)
 class PCBImport(bpy.types.Operator):
 
     # Location where all your converted files are stored
-    file_root       = "/home/matt/Dropbox/Projects/Marek/MPC1000/Gerber/"
+    file_root       = "/home/matt/Dropbox/Projects/Marek/Mainboard/Gerber/"
 
     # Base name of the files
-    file_name       = "MPC1000"
+    file_name       = "Mainboard"
 
     # Colour you want for the mask: blue, red, green, purple, black, white, yellow
-    color           = blue
+    color           = red
 
     # Finish for the board: hasl, enig
     finish          = hasl
@@ -44,14 +44,14 @@ class PCBImport(bpy.types.Operator):
     silk            = white
 
     # Lower left coordinate of the board in PCB
-    offset_x        = 45
-    offset_y        = 79.1
+    offset_x        = 10.01
+    offset_y        = 40.05
 
     # Location where all the component library files are stored
     component_root = "/home/matt/Dropbox/gEDA/Models/components"
 
     # Whether or not to join everything into one single object
-    doJoin = True
+    doJoin          = True
 
     # List of manual rotations in the form of {"refdes": angle, "refdes": angle...}
     rotations = {
@@ -268,55 +268,10 @@ class PCBImport(bpy.types.Operator):
         outline = [c for c in bpy.context.scene.objects if not self.getSelect(c)]
 
         self.deselectAll()
-        for c in outline:
-            self.setSelect(c, True)
 
-        self.setActiveObject(outline[0])
-        bpy.ops.object.join()
 
-        self.outlineCurve = bpy.context.object
+        self.outlineCurve = outline[0]
         self.outlineCurve.location = [self.offset_x, self.offset_y, -0.8]
-
-        self.setMode('EDIT')
-
-        while (len(self.outlineCurve.data.splines) > 1):                
-            for s in self.outlineCurve.data.splines:
-                for p in s.bezier_points:
-                    p.select_control_point = False
-            basecurve = self.outlineCurve.data.splines[0]     
-            end = basecurve.bezier_points[len(basecurve.bezier_points)-1]
-            
-            done = False
-            for i in range(1, len(self.outlineCurve.data.splines)):
-                for p in self.outlineCurve.data.splines[i].bezier_points:
-                    d = self.vabs(p.co - end.co)
-                    if (d < (0.01, 0.01, 0.01)):
-                        end.select_control_point = True
-                        p.select_control_point = True    
-                        bpy.ops.curve.make_segment()
-                        done = True
-                        break
-                    if done:
-                        break
-                if done:
-                    break
-
-            if (done == False):
-                break
-
-        for s in self.outlineCurve.data.splines:
-            for p in s.bezier_points:
-                p.select_control_point = False
-
-        basecurve = self.outlineCurve.data.splines[0]     
-        start = basecurve.bezier_points[0]
-        end = basecurve.bezier_points[len(basecurve.bezier_points)-1]
-
-        start.select_control_point = True
-        end.select_control_point = True
-        bpy.ops.curve.make_segment()
-
-        self.setMode("OBJECT")
 
     def drillBoard(self):
         drillsDone = []
@@ -400,7 +355,7 @@ class PCBImport(bpy.types.Operator):
 
         top.node_tree.nodes['copper'].image = bpy.data.images.load(filepath = self.file_root + "/" + self.file_name + ".top.png")
         top.node_tree.nodes['soldermask'].image = bpy.data.images.load(filepath = self.file_root + "/" + self.file_name + ".topmask.png")
-        top.node_tree.nodes['silk'].image = bpy.data.images.load(filepath = self.file_root + "/" + self.file_name + ".topsilk.png")
+        top.node_tree.nodes['silk'].image = bpy.data.images.load(filepath = self.file_root + "/" + self.file_name + ".topsilk-cropped.png")
         top.node_tree.nodes['pcbtexture'].inputs['Color'].default_value = self.color
         top.node_tree.nodes['pcbtexture'].inputs['Finish'].default_value = self.finish
         top.node_tree.nodes['pcbtexture'].inputs['Silk Color'].default_value = self.silk
@@ -408,7 +363,7 @@ class PCBImport(bpy.types.Operator):
         
         btm.node_tree.nodes['copper'].image = bpy.data.images.load(filepath = self.file_root + "/" + self.file_name + ".bottom.png")
         btm.node_tree.nodes['soldermask'].image = bpy.data.images.load(filepath = self.file_root + "/" + self.file_name + ".bottommask.png")
-        btm.node_tree.nodes['silk'].image = bpy.data.images.load(filepath = self.file_root + "/" + self.file_name + ".bottomsilk.png")
+        btm.node_tree.nodes['silk'].image = bpy.data.images.load(filepath = self.file_root + "/" + self.file_name + ".bottomsilk-cropped.png")
         btm.node_tree.nodes['pcbtexture'].inputs['Color'].default_value = self.color
         btm.node_tree.nodes['pcbtexture'].inputs['Finish'].default_value = self.finish
         btm.node_tree.nodes['pcbtexture'].inputs['Silk Color'].default_value = self.silk
