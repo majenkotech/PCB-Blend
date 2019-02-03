@@ -17,7 +17,7 @@ white = (1.0, 1.0, 1.0, 1.0)
 black = (0.0, 0.0, 0.0, 1.0)
 
 # Mask colours
-red = (0.55, 0.0, 0.0, 1.0)
+red = (0.2, 0.017, 0.031, 1.0)
 green = (0.0, 0.25, 0.0, 1.0)
 blue = (0.0, 0.195, 0.828, 1.0)
 purple = (0.174, 0.0, 0.574, 1.0)
@@ -579,7 +579,7 @@ class PCBImport(bpy.types.Operator):
     wm = None
     context = None
     def startTimer(self):
-        self._timer = self.wm.event_timer_add(1, window=self.context.window)
+        self._timer = self.wm.event_timer_add(2, window=self.context.window)
         
     def stopTimer(self):
         self.wm.event_timer_remove(self._timer)

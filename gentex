@@ -1,7 +1,7 @@
 #!/usr/bin/php
 <?php
 
-$opts = getopt("n:");
+$opts = getopt("n:p:");
 
 if (!array_key_exists("n", $opts)) {
         print "Usage: gentex -n name\n";
@@ -10,7 +10,19 @@ if (!array_key_exists("n", $opts)) {
 
 $name = $opts['n'];
 
-print "Converting gerbers ... ";
+if (array_key_exists("p", $opts)) {
+    print("Converting PCB to Gerbers ... ");
+    $pcb = $opts['p'];
+    if (!file_exists($pcb)) {
+        print("Error: $pcb not found.\n");
+        exit(10);
+    }
+    system("pcb -x gerber --metric --gerberfile \"$name\" \"$pcb\"");
+    system("pcb -x bom --bomfile \"$name.bom\" --xyfile \"$name.xy\" \"$pcb\"");
+    print("done\n");
+}
+
+print "Converting Gerbers ... ";
 generatePreTextures($name);
 system("gerbv --border=0 --export=svg \"$name.outline.gbr\" --output=\"$name.outline-segmented.svg\" --foreground='#CC0000' --background='#000000' --dpi=72000");
 compactOutline("$name.outline-segmented.svg", "$name.outline.svg");
@@ -33,7 +45,9 @@ function generatePreTextures($name) {
 }
     
 function generatePreTexture($name, $layer) {
+    print($layer . " ... ");
     system("gerbv --border=0 --dpi=2000 --export=png \"$name.outline.gbr\" \"$name.$layer.gbr\" --output=\"$name.$layer.png\" --foreground='#000000' --foreground='#ffffff' --background='#000000'");
+    trimImage("$name.$layer.png", 6);
 }
 
 function getSilkOffset($name, $layer) {
@@ -221,4 +235,12 @@ function createCroppedSilk($name, $layer, $offset) {
     ImageCopy($out, $silk, 0, 0, $ox, $oy, $sx, $sy);
 
     ImagePNG($out, $name . "." . $layer . "silk-cropped.png");
+}
+
+function trimImage($image, $amount) {
+    $img = ImageCreateFromPNG($image);
+    $out = ImageCreateTrueColor(ImageSX($img) - ($amount * 2), ImageSY($img) - ($amount * 2));
+
+    ImageCopy($out, $img, 0, 0, $amount, $amount, ImageSX($out), ImageSY($out));
+    ImagePNG($out, $image);
 }
