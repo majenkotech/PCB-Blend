@@ -178,7 +178,7 @@ class PCBImport(bpy.types.Operator):
     ############################
     # Version abstraction routines
     def version(self):
-        return bpy.data.version[0] + (bpy.data.version[1]/100)    
+        return bpy.app.version[0] + (bpy.app.version[1]/100)    
 
     def setSelect(self, object, state):
         if self.version() < 2.80:
