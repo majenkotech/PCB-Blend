@@ -5,7 +5,6 @@ import os
 from mathutils import Vector, Matrix, Quaternion
 import time
 
-
 # Useful colours
 
 # Finishes
@@ -17,7 +16,7 @@ white = (1.0, 1.0, 1.0, 1.0)
 black = (0.0, 0.0, 0.0, 1.0)
 
 # Mask colours
-red = (0.2, 0.017, 0.031, 1.0)
+red = (0.347, 0.000, 0.022, 1.0)
 green = (0.0, 0.25, 0.0, 1.0)
 blue = (0.0, 0.195, 0.828, 1.0)
 purple = (0.174, 0.0, 0.574, 1.0)
@@ -29,13 +28,13 @@ yellow = (0.814, 0.429, 0.0, 1.0)
 class PCBImport(bpy.types.Operator):
 
     # Location where all your converted files are stored
-    file_root       = "/home/matt/Dropbox/Projects/Marek/Mainboard/Gerber/"
+    file_root       = "/home/matt/Dropbox/Projects/SoundStick/Render/"
 
     # Base name of the files
-    file_name       = "Mainboard"
+    file_name       = "SoundStick"
 
     # Colour you want for the mask: blue, red, green, purple, black, white, yellow
-    color           = red
+    color           = black
 
     # Finish for the board: hasl, enig
     finish          = hasl
@@ -44,21 +43,55 @@ class PCBImport(bpy.types.Operator):
     silk            = white
 
     # Lower left coordinate of the board in PCB
-    offset_x        = 10.01
-    offset_y        = 40.05
+    page_height     = 127
+    board_top       = 68
+    board_bottom    = 94
+
+    offset_x        = 39
+    offset_y        = (board_bottom - (board_top - (page_height-board_bottom)))
 
     # Location where all the component library files are stored
     component_root = "/home/matt/Dropbox/gEDA/Models/components"
-
     # Whether or not to join everything into one single object
-    doJoin          = True
+    doJoin          = False
 
     # List of manual rotations in the form of {"refdes": angle, "refdes": angle...}
     rotations = {
+        "U105": 90,
+        "Q101": 90,
+        "Q102": 90,
     }
 
-
-
+    dnp = {
+        "PAD101": 1,
+        "PAD102": 1,
+        "PAD103": 1,
+        "PAD104": 1,
+        "PAD105": 1,
+        "PAD106": 1,
+        "PAD107": 1,
+        "PAD108": 1,
+        "PAD109": 1,
+        "PAD111": 1,
+        "PAD112": 1,
+        "PAD113": 1,
+        "PAD114": 1,
+        "PAD115": 1,
+        "PAD116": 1,
+        "PAD117": 1,
+        "PAD118": 1,
+        "PAD119": 1,
+        "PAD120": 1,
+        "PAD121": 1,
+        "PAD122": 1,
+        "PAD124": 1,
+        "PAD125": 1,
+        "TP101": 1,
+        "TP102": 1,
+        "TP103": 1,
+        "TP104": 1,
+        "TP105": 1,
+    }
 
     bl_label = "Import gEDA PCB Models"
     bl_idname = "wm.modal_timer_operator"
@@ -73,7 +106,7 @@ class PCBImport(bpy.types.Operator):
     txt = None    
     outlineCurve = None
     pcb = None
-
+    objects = None
 
     def NormalInDirection(self, normal, direction, limit = 0.5 ):
         return direction.dot( normal ) > limit
@@ -269,7 +302,6 @@ class PCBImport(bpy.types.Operator):
 
         self.deselectAll()
 
-
         self.outlineCurve = outline[0]
         self.outlineCurve.location = [self.offset_x, self.offset_y, -0.8]
 
@@ -282,6 +314,7 @@ class PCBImport(bpy.types.Operator):
         inHeader = True
         drillWidth = 0
         bits = []
+        holes = []
         nbits = 0
         for line in content:
             if line == '%':
@@ -306,14 +339,13 @@ class PCBImport(bpy.types.Operator):
                     if (pos not in drillsDone):
                         drillsDone.append(pos)
                         bpy.ops.curve.primitive_bezier_circle_add(radius = drillWidth / 2, location = (x, y, -0.8))
-                        self.setSelect(bpy.context.active_object, False)
-
-        holes = [c for c in bpy.context.scene.objects if not self.getSelect(c)]
+                        holes.append(bpy.context.active_object);
 
         self.deselectAll()
 
         for c in holes:
             self.setSelect(c, True)
+        self.setSelect(self.outlineCurve, True)
         self.setActiveObject(self.outlineCurve)
         bpy.ops.object.join()
 
@@ -359,7 +391,8 @@ class PCBImport(bpy.types.Operator):
         top.node_tree.nodes['pcbtexture'].inputs['Color'].default_value = self.color
         top.node_tree.nodes['pcbtexture'].inputs['Finish'].default_value = self.finish
         top.node_tree.nodes['pcbtexture'].inputs['Silk Color'].default_value = self.silk
-        top.node_tree.nodes['mapping'].scale = (1, 1, 1)
+        top.node_tree.nodes['mapping'].scale = (0.996, 0.996, 1)
+        top.node_tree.nodes['mapping'].translation = (0, 0.0055, 0)
         
         btm.node_tree.nodes['copper'].image = bpy.data.images.load(filepath = self.file_root + "/" + self.file_name + ".bottom.png")
         btm.node_tree.nodes['soldermask'].image = bpy.data.images.load(filepath = self.file_root + "/" + self.file_name + ".bottommask.png")
@@ -367,7 +400,8 @@ class PCBImport(bpy.types.Operator):
         btm.node_tree.nodes['pcbtexture'].inputs['Color'].default_value = self.color
         btm.node_tree.nodes['pcbtexture'].inputs['Finish'].default_value = self.finish
         btm.node_tree.nodes['pcbtexture'].inputs['Silk Color'].default_value = self.silk
-        btm.node_tree.nodes['mapping'].scale = (1, -1, 1)
+        btm.node_tree.nodes['mapping'].scale = (0.996, -0.996, 1)
+        btm.node_tree.nodes['mapping'].translation = (0, 0-.0002, 0)
                     
         self.pcb.data.materials.append(bpy.data.materials['Metal'])
         self.pcb.data.materials.append(top)
@@ -472,9 +506,12 @@ class PCBImport(bpy.types.Operator):
 
         self.deselectAll()
 
-        objects = []
+        self.objects = []
 
         for id, name, value, x, y, rot, side in layout_table:
+
+            if id == "(unknown)":
+                continue
             z = 0
             yrot = 0
             if side == "bottom":
@@ -485,6 +522,11 @@ class PCBImport(bpy.types.Operator):
             try:
                 if rotations[id]:
                     frot = rotations[id]
+            except:
+                pass
+            try:
+                if self.dnp[id] == 1:
+                    continue
             except:
                 pass
             frot = frot / 57.2957795
@@ -501,12 +543,14 @@ class PCBImport(bpy.types.Operator):
             dupli.location = loc
             dupli.rotation_euler = zrot
             self.linkObject(dupli)
-            objects.append(oname)
+            self.objects.append(oname)
 
+
+    def cleanup(self):
         self.deselectAll()
 
         if self.doJoin:            
-            for ob in objects:
+            for ob in self.objects:
                 self.setSelect(bpy.data.objects[ob], True)
 
             self.setSelect(bpy.data.objects['PCB'], True)
@@ -514,11 +558,27 @@ class PCBImport(bpy.types.Operator):
             self.setActiveObject(bpy.data.objects['PCB'])
             bpy.ops.object.join()
             self.setActiveObject(bpy.data.objects['PCB'])
-            bpy.context.object.data.name = self.file_name
-            bpy.context.object.name = self.file_name
+        else:
+            for ob in self.objects:
+                bpy.data.objects[ob].parent = self.pcb
+                bpy.data.objects[ob].location[0] -= self.pcb.location[0]
+                bpy.data.objects[ob].location[1] -= self.pcb.location[1]
+                bpy.data.objects[ob].location[2] -= self.pcb.location[2]
+                
+        for ob in self.objects:
+            self.setSelect(bpy.data.objects[ob], False)
 
+        self.setSelect(self.pcb, True)
+        self.setActiveObject(self.pcb)
+        bpy.context.object.data.name = self.file_name
+        bpy.context.object.name = self.file_name
         bpy.ops.object.origin_set(type='ORIGIN_CENTER_OF_MASS')
-
+        self.pcb.location = [0, 0, 0]
+        try:
+            bpy.data.cameras[0].dof.focus_object=self.pcb
+        except:
+            pass
+    
 
     ## Modal stuff
 
@@ -557,13 +617,15 @@ class PCBImport(bpy.types.Operator):
                 self.selectTopView()
                 self._phase+=1
                 self.startTimer()
+                print("Phase 0 done");
                 return {'PASS_THROUGH'}
-#                return {'FINISHED'}
+
             if (self._phase == 1):
                 self.projectFromView()
                 self.selectBottomView()
                 self._phase+=1
                 self.startTimer()
+                print("Phase 1 done");
                 return {'PASS_THROUGH'}
 
             if (self._phase == 2):
@@ -571,6 +633,13 @@ class PCBImport(bpy.types.Operator):
                 self.populate()
                 self.deleteOrphans()
                 self.setViewOrientation((1, 1, 1), 0.2)
+                self._phase+=1
+                self.startTimer()
+                print("Phase 2 done")
+                return {'PASS_THROUGH'}
+            
+            if (self._phase == 3):
+                self.cleanup()
                 print("END")
                 return {'FINISHED'}
 
@@ -612,4 +681,6 @@ def unregister():
 
 if __name__ == "__main__":
     register()
+
+
 

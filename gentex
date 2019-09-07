@@ -1,6 +1,9 @@
 #!/usr/bin/php
 <?php
 
+$RES=1000;
+$SR=36*$RES*2;
+
 $opts = getopt("n:p:");
 
 if (!array_key_exists("n", $opts)) {
@@ -24,7 +27,7 @@ if (array_key_exists("p", $opts)) {
 
 print "Converting Gerbers ... ";
 generatePreTextures($name);
-system("gerbv --border=0 --export=svg \"$name.outline.gbr\" --output=\"$name.outline-segmented.svg\" --foreground='#CC0000' --background='#000000' --dpi=72000");
+system("gerbv --border=0 --export=svg \"$name.outline.gbr\" --output=\"$name.outline-segmented.svg\" --foreground='#CC0000' --background='#000000' --dpi=$SR");
 compactOutline("$name.outline-segmented.svg", "$name.outline.svg");
 
 $topOffset = getSilkOffset($name, "top");
@@ -39,19 +42,23 @@ function generatePreTextures($name) {
     generatePreTexture($name, "bottom");
     generatePreTexture($name, "bottommask");
     generatePreTexture($name, "bottomsilk");
+    generatePreTexture($name, "bottompaste");
     generatePreTexture($name, "top");
     generatePreTexture($name, "topmask");
     generatePreTexture($name, "topsilk");
+    generatePreTexture($name, "toppaste");
 }
     
 function generatePreTexture($name, $layer) {
+    global $RES;
     print($layer . " ... ");
-    system("gerbv --border=0 --dpi=2000 --export=png \"$name.outline.gbr\" \"$name.$layer.gbr\" --output=\"$name.$layer.png\" --foreground='#000000' --foreground='#ffffff' --background='#000000'");
+    system("gerbv --border=0 --dpi=$RES --export=png \"$name.outline.gbr\" \"$name.$layer.gbr\" --output=\"$name.$layer.png\" --foreground='#000000' --foreground='#ffffff' --background='#000000'");
     trimImage("$name.$layer.png", 6);
 }
 
 function getSilkOffset($name, $layer) {
-    system("gerbv --border=0 --dpi=2000 --export=png \"$name.outline.gbr\" \"$name.$layer" . "silk.gbr\" --output=\"$name.$layer" . "silk-outline.png\" --foreground='#ff0000' --foreground='#ffffff' --background='#000000'");
+    global $RES;
+    system("gerbv --border=0 --dpi=$RES --export=png \"$name.outline.gbr\" \"$name.$layer" . "silk.gbr\" --output=\"$name.$layer" . "silk-outline.png\" --foreground='#ff0000' --foreground='#ffffff' --background='#000000'");
 
     $img = ImageCreateFromPNG("$name.$layer" . "silk-outline.png");
 
@@ -87,9 +94,54 @@ function compactOutline($in, $out) {
         $pathdata = $path->getAttribute("d");
         $transform = $path->getAttribute("transform");
         $style = $path->getAttribute("style");
-        $ob = parsePathData($pathdata);
-        $pathobjects[] = $ob;
+        $obs = parsePathData($pathdata);
+        foreach ($obs as $ob) {
+            $pathobjects[] = $ob;
+        }
     }
+
+    print "\n\nDeleting orphan segments:\n";
+
+    do {
+        $orphan = false;
+        foreach ($pathobjects as $k=>$path) {
+            print "Testing segment:\n";
+            dumpSegment($path);
+            print "  Matches:\n";
+            $hasStart = false;
+            $hasEnd = false;
+            foreach ($pathobjects as $other) {
+                if ($path == $other) continue;
+                $start = (closeTo($path->start, $other->start) || closeTo($path->start, $other->end));
+                $end = (closeTo($path->end, $other->start) || closeTo($path->end, $other->end));
+
+                if ($start) {
+                    $hasStart = true;
+                }
+
+                if ($end) {
+                    $hasEnd = true;
+                }
+
+                if ($hasStart && $hasEnd) {
+                    break;
+                }
+            }
+
+            if (($hasStart == false) || ($hasEnd == false)) {
+                $orphan = true;
+                dumpSegment($path);
+                unset($pathobjects[$k]);
+                break;
+            }
+        }
+    } while ($orphan);
+
+    print "\n\nRemaining segments:\n";
+    foreach ($pathobjects as $ob) {
+        dumpSegment($ob);
+    }
+            
 
     $orderedPaths = array();
 
@@ -103,10 +155,10 @@ function compactOutline($in, $out) {
         $unmatched = array();
         foreach ($pathobjects as $po) {
             if (!$foundone) {
-                if (($po->start->x == $lastObject->end->x) && ($po->start->y == $lastObject->end->y)) {
+                if (closeTo($po->start, $lastObject->end)) {
                     $foundone = true;
                     $orderedPaths[] = $po;
-                } else if (($po->end->x == $lastObject->end->x) && ($po->end->y == $lastObject->end->y)) {
+                } else if (closeTo($po->end, $lastObject->end)) {
                     $s = $po->start;
                     $po->start = $po->end;
                     $po->end = $s;
@@ -126,7 +178,17 @@ function compactOutline($in, $out) {
         }
         $pathobjects = $unmatched;
         if (!$foundone) {
-            print("Error: Nothing found, but objects still exist.");
+            print("\n\nWarning: Nothing found, but objects still exist.\n\n");
+
+            print("Attached: " . count($orderedPaths) . "\n");
+            foreach ($orderedPaths as $p) {
+                dumpSegment($p);
+            }
+            print("Unattached: " . count($pathobjects) . "\n");
+            foreach ($pathobjects as $p) {
+                dumpSegment($p);
+            }
+
             break;
         }
     }
@@ -181,8 +243,19 @@ function compactOutline($in, $out) {
     file_put_contents($out, implode("\n", $o));
 }
 
+function closeTo($a, $b) {
+    $dx = abs($a->x - $b->x);
+    $dy = abs($a->y - $b->y);
+    return (($dx < 0.01) && ($dy < 0.01));
+}
+
 function parsePathData($pd) {
     $data = explode(" ", $pd);
+
+    $cx = 0;
+    $cy = 0;
+
+    $obs = array();
     $ob = new stdClass;
 
     while (count($data) > 0) {
@@ -190,19 +263,29 @@ function parsePathData($pd) {
 
         switch ($bit) {
             case 'M': // Moveto
-                $ob->start = new stdClass;
-                $ob->start->x = array_shift($data);
-                $ob->start->y = array_shift($data);
+                $cx = array_shift($data);
+                $cy = array_shift($data);
                 break;
 
             case 'L': // Lineto
+                $ob = new stdClass;
+                $ob->start = new stdClass;
+                $ob->start->x = $cx;
+                $ob->start->y = $cy;
                 $ob->end = new stdClass;
                 $ob->end->x = array_shift($data);
                 $ob->end->y = array_shift($data);
                 $ob->type = 'L';
+                $obs[] = $ob;
+                $cx = $ob->end->x;
+                $cy = $ob->end->y;
                 break;
 
             case 'C': // Circleto
+                $ob = new stdClass;
+                $ob->start = new stdClass;
+                $ob->start->x = $cx;
+                $ob->start->y = $cy;
                 $ob->cp0 = new stdClass;
                 $ob->cp0->x = array_shift($data);
                 $ob->cp0->y = array_shift($data);
@@ -213,11 +296,14 @@ function parsePathData($pd) {
                 $ob->end->x = array_shift($data);
                 $ob->end->y = array_shift($data);
                 $ob->type = 'C';
+                $obs[] = $ob;
+                $cx = $ob->end->x;
+                $cy = $ob->end->y;
                 break;
         }
     }
 
-    return $ob;
+    return $obs;
 }
 
 function createCroppedSilk($name, $layer, $offset) {
@@ -243,4 +329,17 @@ function trimImage($image, $amount) {
 
     ImageCopy($out, $img, 0, 0, $amount, $amount, ImageSX($out), ImageSY($out));
     ImagePNG($out, $image);
+}
+
+function dumpSegment($s) {
+    switch ($s->type) {
+        case 'L':
+            print "    Line from ";
+            break;
+        case 'C':
+            print "    Curve from ";
+            break;
+    }
+
+    print $s->start->x . "," . $s->start->y . " to " . $s->end->x . "," . $s->end->y . "\n";
 }
